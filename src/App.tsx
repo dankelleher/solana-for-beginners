@@ -1,8 +1,8 @@
-import React, {FC, useCallback, useEffect, useMemo, useState} from 'react';
+import React, {FormEvent, FC, useCallback, useEffect, useMemo, useState} from 'react';
 import './App.css';
 import logo from './logo.svg';
 import { ConnectionProvider, useConnection, useWallet, WalletProvider } from '@solana/wallet-adapter-react';
-import {clusterApiUrl, LAMPORTS_PER_SOL} from "@solana/web3.js";
+import {clusterApiUrl, Connection, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction} from "@solana/web3.js";
 import {
     PhantomWalletAdapter,
     SolflareWalletAdapter,
@@ -15,6 +15,13 @@ import {
 } from "@solana/wallet-adapter-react-ui";
 
 require('@solana/wallet-adapter-react-ui/styles.css');
+
+interface FormElements extends HTMLFormControlsCollection {
+    address: HTMLInputElement
+}
+interface TransferForm extends HTMLFormElement {
+    readonly elements: FormElements
+}
 
 const useBalance = () => {
     const wallet = useWallet()
@@ -34,6 +41,40 @@ const useBalance = () => {
 
     return balance;
 };
+
+const Transfer = () => {
+    const wallet = useWallet()
+    const { connection } = useConnection();
+    const [tx, setTx] = useState<string>();
+    const [error, setError] = useState<Error>();
+
+    if (!connection || !wallet.connected || !wallet.publicKey) return <></>
+
+    const transferFunds = async (e: FormEvent<TransferForm>) => {
+        e.preventDefault();
+
+        if (!wallet.publicKey) return;
+
+        const transaction = new Transaction().add(
+            SystemProgram.transfer({
+                fromPubkey: wallet.publicKey,
+                toPubkey: new PublicKey(e.currentTarget.elements.address.value),
+                lamports: 0.1 * LAMPORTS_PER_SOL
+            })
+        );
+
+        wallet.sendTransaction(transaction, connection).then(setTx).catch(setError);
+    }
+
+    return <>
+        <form onSubmit={transferFunds}>
+            Send 0.1 SOL to <input name="address"/>
+            <input type="submit" value="Send" />
+        </form>
+        { tx && <p>Done! <a href={`https://explorer.solana.com/tx/${tx}?cluster=devnet`}>View in explorer</a></p>}
+        { error && <p>{error.message}</p>}
+    </>
+}
 
 const Airdrop:FC = () => {
     const { connection } = useConnection();
@@ -55,6 +96,7 @@ const Content:FC = () => {
         <p>Hi {wallet?.publicKey?.toBase58()}!</p>
         <Airdrop/>
         {balance && <p>Your balance is {(balance / LAMPORTS_PER_SOL).toFixed(2)} SOL</p>}
+        <Transfer/>
     </header>
 }
 
