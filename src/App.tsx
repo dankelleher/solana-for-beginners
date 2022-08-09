@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, {FC, useCallback, useEffect, useMemo, useState} from 'react';
 import './App.css';
 import logo from './logo.svg';
-import { ConnectionProvider, useWallet, WalletProvider } from '@solana/wallet-adapter-react';
-import { clusterApiUrl } from "@solana/web3.js";
+import { ConnectionProvider, useConnection, useWallet, WalletProvider } from '@solana/wallet-adapter-react';
+import {clusterApiUrl, LAMPORTS_PER_SOL} from "@solana/web3.js";
 import {
     PhantomWalletAdapter,
     SolflareWalletAdapter,
@@ -16,20 +16,45 @@ import {
 
 require('@solana/wallet-adapter-react-ui/styles.css');
 
-const Content = () => {
+const useBalance = () => {
     const wallet = useWallet()
+    const { connection } = useConnection();
+    const [balance, setBalance] = useState<number>();
+
+    useEffect(() => {
+        if (!connection || !wallet.connected || !wallet.publicKey) {
+            setBalance(undefined);
+            return;
+        }
+
+        connection.getBalance(wallet.publicKey).then(setBalance)
+        const subscription = connection.onAccountChange(wallet.publicKey, (a) => setBalance(a.lamports));
+        return () => { connection.removeAccountChangeListener(subscription) };
+    }, [wallet, connection])
+
+    return balance;
+};
+
+const Airdrop:FC = () => {
+    const { connection } = useConnection();
+    const wallet = useWallet()
+    const airdrop = useCallback(async () => {
+        if (!wallet.publicKey) return;
+        await connection.requestAirdrop(wallet.publicKey, LAMPORTS_PER_SOL)
+    }, [connection, wallet.publicKey]);
+    if (!wallet.connected || !wallet.publicKey) return <></>
+    return <button className="wallet-adapter-button wallet-adapter-button-trigger" onClick={airdrop}>Praise the sun!</button>
+}
+
+const Content:FC = () => {
+    const wallet = useWallet()
+    const balance = useBalance()
     return <header className="App-header">
         <WalletMultiButton/>
         <img src={logo} className="App-logo" alt="logo" />
         <p>Hi {wallet?.publicKey?.toBase58()}!</p>
-        <a
-            className="App-link"
-            href="https://docs.solana.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-        >
-            Learn Solana
-        </a>
+        <Airdrop/>
+        {balance && <p>Your balance is {(balance / LAMPORTS_PER_SOL).toFixed(2)} SOL</p>}
     </header>
 }
 
