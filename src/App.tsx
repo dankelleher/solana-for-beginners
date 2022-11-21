@@ -2,7 +2,7 @@ import React, {FormEvent, FC, useCallback, useEffect, useMemo, useState} from 'r
 import './App.css';
 import logo from './logo.svg';
 import { ConnectionProvider, useConnection, useWallet, WalletProvider } from '@solana/wallet-adapter-react';
-import {clusterApiUrl, Connection, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction} from "@solana/web3.js";
+import {clusterApiUrl, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction} from "@solana/web3.js";
 import {
     PhantomWalletAdapter,
     SolflareWalletAdapter,
@@ -13,8 +13,11 @@ import {
     WalletModalProvider,
     WalletMultiButton
 } from "@solana/wallet-adapter-react-ui";
+import {CivicProfile, Profile} from "@civic/profile";
 
 require('@solana/wallet-adapter-react-ui/styles.css');
+
+const network = WalletAdapterNetwork.Mainnet;
 
 interface FormElements extends HTMLFormControlsCollection {
     address: HTMLInputElement
@@ -41,6 +44,20 @@ const useBalance = () => {
 
     return balance;
 };
+
+const useProfile = () => {
+    const { connection } = useConnection();
+    const wallet = useWallet()
+    const [ profile, setProfile ] = useState<Profile>();
+
+
+    useEffect(() => {
+        if (!wallet.publicKey) return;
+        CivicProfile.get(wallet.publicKey?.toBase58(), { solana: { connection } }).then(setProfile)
+    }, [wallet, connection]);
+
+    return profile;
+}
 
 const Transfer = () => {
     const wallet = useWallet()
@@ -90,26 +107,30 @@ const Airdrop:FC = () => {
 const Content:FC = () => {
     const wallet = useWallet()
     const balance = useBalance()
+    const profile = useProfile();
+
+    const name = useMemo(() => profile?.name?.value || wallet.publicKey?.toBase58() || "", [profile, wallet.publicKey])
+
     return <header className="App-header">
         <WalletMultiButton/>
         <img src={logo} className="App-logo" alt="logo" />
-        <p>Hi {wallet?.publicKey?.toBase58()}!</p>
-        <Airdrop/>
+        <p>Hi <a href={"https://civic.me/" + profile?.did}>{name}</a>!</p>
+        {profile?.image && <img alt={name} src={profile?.image?.url} width={100}/>}
+        { network !== WalletAdapterNetwork.Mainnet && <Airdrop/> }
         {balance && <p>Your balance is {(balance / LAMPORTS_PER_SOL).toFixed(2)} SOL</p>}
         <Transfer/>
     </header>
 }
 
 function App() {
-    const network = WalletAdapterNetwork.Devnet;
-    const endpoint = useMemo(() => clusterApiUrl(network), [network]);
+    const endpoint = "https://rpc.ankr.com/solana" //clusterApiUrl(network);
     const wallets = useMemo(
         () => [
             new PhantomWalletAdapter(),
             new SolflareWalletAdapter({ network }),
             new TorusWalletAdapter(),
         ],
-        [network]
+        []
     );
 
     return (
