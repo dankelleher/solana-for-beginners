@@ -13,6 +13,7 @@ import {
     WalletModalProvider,
     WalletMultiButton
 } from "@solana/wallet-adapter-react-ui";
+import {QRCodeSVG} from "qrcode.react";
 
 require('@solana/wallet-adapter-react-ui/styles.css');
 
@@ -42,7 +43,7 @@ const useBalance = () => {
     return balance;
 };
 
-const Transfer = () => {
+const Transfer:FC<{ to?: string }> = ({ to }) => {
     const wallet = useWallet()
     const { connection } = useConnection();
     const [tx, setTx] = useState<string>();
@@ -53,12 +54,12 @@ const Transfer = () => {
     const transferFunds = async (e: FormEvent<TransferForm>) => {
         e.preventDefault();
 
-        if (!wallet.publicKey) return;
+        if (!wallet.publicKey || !to) return;
 
         const transaction = new Transaction().add(
             SystemProgram.transfer({
                 fromPubkey: wallet.publicKey,
-                toPubkey: new PublicKey(e.currentTarget.elements.address.value),
+                toPubkey: new PublicKey(to),
                 lamports: 0.1 * LAMPORTS_PER_SOL
             })
         );
@@ -67,10 +68,12 @@ const Transfer = () => {
     }
 
     return <>
-        <form onSubmit={transferFunds}>
-            Send 0.1 SOL to <input name="address"/>
-            <input type="submit" value="Send" />
-        </form>
+        { to && (
+            <form onSubmit={transferFunds}>
+                Send 0.1 SOL to {to}
+                <input type="submit" value="Send" className="wallet-adapter-button wallet-adapter-button-trigger" />
+            </form>
+        )}
         { tx && <p>Done! <a href={`https://explorer.solana.com/tx/${tx}?cluster=devnet`}>View in explorer</a></p>}
         { error && <p>{error.message}</p>}
     </>
@@ -90,13 +93,26 @@ const Airdrop:FC = () => {
 const Content:FC = () => {
     const wallet = useWallet()
     const balance = useBalance()
+    const [recipient, setRecipient] = useState<string>();
+
+    useEffect(() => {
+        setRecipient(window.location.hash?.replace("#", ""));
+    }, []);
+
     return <header className="App-header">
         <WalletMultiButton/>
         <img src={logo} className="App-logo" alt="logo" />
         <p>Hi {wallet?.publicKey?.toBase58()}!</p>
+        {wallet.connected && wallet.publicKey &&
+            <QRCodeSVG
+                style={{ "marginBottom": "20px" }}
+                value={"https://solpaylite.surge.sh/#" + wallet.publicKey.toBase58()}
+            />
+        }
+
         <Airdrop/>
         {balance && <p>Your balance is {(balance / LAMPORTS_PER_SOL).toFixed(2)} SOL</p>}
-        <Transfer/>
+        <Transfer to={recipient}/>
     </header>
 }
 
